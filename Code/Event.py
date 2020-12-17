@@ -326,8 +326,8 @@ class Terminate(Event):
     def effect(self):
         self.StructuredNote.is_terminated=True
         #once take effect, '预警类型' must be filled with event name
-        self.record_type()
         self.StructuredNote.warning_series.loc[:]=np.nan #clear any other warnings since termination makes them not important
+        self.record_type()
         if pd.isna(self.StructuredNote.profile.loc['终止份额价值']):
             payment=self.StructuredNote.mature()
         else:

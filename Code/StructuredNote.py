@@ -9,6 +9,16 @@ import pandas as pd
 import Event
 from pandas.tseries.offsets import CustomBusinessDay
 
+def update_structurenotes(structurenotes):
+    import pandas as pd
+    for sn in structurenotes:
+        last_update=sn.profile.loc['最后更新日期']
+        if pd.isna(last_update):
+            sn.update()
+        else:
+            sn.update(last_update)
+    return structurenotes
+
 class StructuredNote:
     
     def __init__(self,profile,data):
@@ -209,11 +219,11 @@ class SnowBall(StructuredNote):
         super().__init__(profile,data)
         self._init_currentclass()
         
-    def _init_currentclass(self):
-        if pd.isna(self.profile.loc['提前终止日']):
-            self.profile.loc['终止日']=self.end_date
-        else:
-            self.profile.loc['终止日']=self.profile.loc['提前终止日']
+    # def _init_currentclass(self):
+        # if pd.isna(self.profile.loc['提前终止日']):
+        #     self.profile.loc['终止日']=self.end_date
+        # else:
+        #     self.profile.loc['终止日']=self.profile.loc['提前终止日']
             
     def print_keyinfo(self):
         print('当前日期：{}'.format(self.today.date()))
@@ -249,7 +259,7 @@ class SnowBall(StructuredNote):
             return self.profile.loc['份额面值']*(1+self.profile.loc['票面利率']*duration/365)
         elif pd.isna(self.profile.loc['敲入日']):
             #if knock in is not triggered
-            duration=(self.profile.loc['终止日']-self.profile.loc['期初观察日']).days
+            duration=(self.profile.loc['到期日']-self.profile.loc['期初观察日']).days
             return self.profile.loc['份额面值']*(1+self.profile.loc['票面利率']*duration/365)
         else:
             td=CustomBusinessDay(0,holidays=self.td_holidays)
