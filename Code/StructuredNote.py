@@ -416,3 +416,10 @@ class Shark(StructuredNote):
         
         duration=(self.end_date-self.start_date).days
         return self.profile.loc['份额面值']*(1+rate*duration/365)
+    
+    def to_excel(self):
+        knockout_dates=self.knockout_dates.copy()
+        self.knockout_dates=pd.Series([],name='敲出观察日')
+        res=super().to_excel()
+        self.knockout_dates=knockout_dates
+        return res

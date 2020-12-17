@@ -13,6 +13,8 @@ import numpy as np
 import pandas as pd
 
 """
+BASH start command:
+    
 export FLASK_APP=app.py
 export FLASK_ENV=development
 flask run --host localhost --port 8000
