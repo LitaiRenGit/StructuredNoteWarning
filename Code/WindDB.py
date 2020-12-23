@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import ReadFiles as RF
 from WindPy import w
-import backoff
 
 w.start()
 i=5
@@ -88,14 +87,11 @@ def update_db_000905(path=r'../Data\000905.csv'):
     sql=flag_table.insert().values({'DateTime':now,'000905.SH_isUpdate':True})
     RF.engine.execute(sql)
     
-# @backoff.on_predicate(backoff.constant, lambda x:True,interval=3600) #try once a hour to try to retrieve data
-# @backoff.on_predicate(backoff.constant, lambda x:not x,max_tries=5,interval=5) #try 5 times to retrieve data
 def polling_000905(T:int=7):
-    # print('run polling_000905')
-    retrieve_000905(T)
     is_retrieved_000905=is_retrieved(['000905.SH'])[0]
     is_updated_000905=is_updated(['000905.SH'])[0]
-    if is_retrieved_000905:
-        if not is_updated_000905:
-            update_db_000905()
+    if not is_retrieved_000905:
+        retrieve_000905(T)
+    if not is_updated_000905:
+        update_db_000905()
     return is_updated_000905
