@@ -130,6 +130,114 @@ def updatePrice():
         res=wind.polling_000905()
     return jsonify(success=res)
 
+def my_hist(x,bins=None):
+    # x is 1D array
+    import numpy as np
+    from scipy.stats import gaussian_kde
+    if bins is None:
+        bins=np.arange(0.5,1.5+1e-8,0.05)
+    hist,edges=np.histogram(x,bins=bins)
+    center=(edges[:-1]+edges[1:])/2
+    pdf=gaussian_kde(x).pdf(center)
+    return center,hist,pdf
+    
+@app.route('/api/chart/rule',methods=['GET','POST'])
+def chartRule():
+    from pandas.tseries.offsets import Day
+    json_dict=request.get_json()
+    app.logger.info(json_dict)
+    method=json_dict.pop('method')
+    if method == 'price':
+        codes=json_dict.pop('codes')
+        dates=json_dict.pop('dates')
+        if not dates: #when first open the page, dates=[]
+            d2=pd.Timestamp.today()
+            d1=d2-Day(2*365)
+            dates=[str(d1.date()),str(d2.date())]
+        df=RF.execute_sql("Select Date,"+','.join(('`'+ele+'`' for ele in codes))+
+                          ' From Price Where Date Between '+'"'+dates[0]+'" And "'+dates[1]+'" Order by Date',
+                          RF.engine,'Date')
+        df.set_index('Date',inplace=True)
+        date=df.index.to_list()
+        price=[col.to_list() for _,col in df.iteritems()]
+        price_level=df/df.iloc[0,:]
+        price_level=[col.to_list() for _,col in price_level.iteritems()]
+        return jsonify(date=date,price=price,price_level=price_level,success=True)
+    elif method == 'statistics_1':
+        df=RF.fetch_db('select * from Profile Left Join Warning On Profile.key==Warning.key',['*'],{'isTerminated':0},{},{'key':'DESC'})
+        pie_series=df.groupby('Type')['Type'].count()
+        data_1={'x':pie_series.index.to_list(),'y':pie_series.to_list()}
+        df=RF.execute_sql('select Maturity,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          'Maturity')
+        df['year']=df['Maturity'].apply(lambda x:x.year)
+        df['year']=df['year'].apply(lambda x:2018+np.random.randint(4))#mock data
+        df.drop(columns='Maturity',inplace=True)
+        df['num']=1
+        hist_count=pd.pivot_table(df,values='num',index='Type',columns='year',aggfunc=np.sum)
+        hist_count=hist_count.where(hist_count.notna(), 0)
+        data_2={'x':hist_count.columns.to_list(),'y':hist_count.to_numpy().tolist(),
+                'legend':hist_count.index.to_list()}
+        return jsonify(data_1=data_1,data_2=data_2,success=True)
+    elif method == "statistics_2":
+        df=RF.execute_sql('select * from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          RF._en_profile_date_columns)
+        df['KnockOut']=df['KnockOut'].apply(lambda x:1+0.2*np.random.randn())#mock data
+        df['KnockIn']=df['KnockIn'].apply(lambda x:0.8-0.2*np.random.randn())#mock data
+        center,hist,pdf=my_hist(df['KnockOut'].dropna().to_numpy())
+        center,hist,pdf=center.tolist(),hist.tolist(),pdf.tolist()
+        KnockOut=dict(center=center,hist=hist,pdf=pdf)
+        center,hist,pdf=my_hist(df['KnockIn'].dropna().to_numpy())
+        center,hist,pdf=center.tolist(),hist.tolist(),pdf.tolist()
+        KnockIn=dict(center=center,hist=hist,pdf=pdf)
+        #calculate return distribution
+        df=RF.execute_sql('select Date, `000905.SH` from Price order by Date',RF.engine,'Date').set_index('Date')
+        def return_pdf(series):
+            from scipy.stats import gaussian_kde
+            def _f(series,diff_num):
+                temp=np.log(series.iloc[-2*diff_num:].to_numpy())
+                temp=temp[diff_num:]-temp[:-diff_num]
+                return np.exp(temp)
+            daynum_1m=21
+            return_1m=_f(series,daynum_1m)
+            return_3m=_f(series,3*daynum_1m)
+            return_6m=_f(series,6*daynum_1m)
+            return_12m=_f(series,12*daynum_1m)
+            return_axis=np.arange(0.5,1.5+1e-8,0.001)
+            # return_axis=(return_axis[:-1]+return_axis[1:])/2
+            pdf_1m=gaussian_kde(return_1m).pdf(return_axis)
+            pdf_3m=gaussian_kde(return_3m).pdf(return_axis)
+            pdf_6m=gaussian_kde(return_6m).pdf(return_axis)
+            pdf_12m=gaussian_kde(return_12m).pdf(return_axis)
+            return return_axis,pdf_1m,pdf_3m,pdf_6m,pdf_12m
+        return_axis,pdf_1m,pdf_3m,pdf_6m,pdf_12m=return_pdf(df['000905.SH'])
+        return_axis,pdf_1m,pdf_3m,pdf_6m,pdf_12m=return_axis.tolist(),pdf_1m.tolist(),pdf_3m.tolist(),pdf_6m.tolist(),pdf_12m.tolist()
+        price_level_pdf=dict(x=return_axis,pdf_1m=pdf_1m,pdf_3m=pdf_3m,pdf_6m=pdf_6m,pdf_12m=pdf_12m)
+        return jsonify(KnockOut=KnockOut,KnockIn=KnockIn,price_level_pdf=price_level_pdf,success=True)
+    elif method == 'statistics_3':
+        df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          ['StartDate','TerminateDate'])
+        today=pd.Timestamp.today()
+        df['life']=(today-df['StartDate']).apply(lambda x:x.days)
+        df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
+                                                    df.loc[df['StartDate'].notna(),'TerminateDate']).apply(lambda x:x.days)
+        df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
+        df.drop(columns=['StartDate','TerminateDate'],inplace=True)
+        data=df.groupby('Type').apply(lambda x:x['life'].to_list())
+        key,val=data.index.to_list(),data.to_list()
+        return jsonify(x=key,y=val,success=True)
+    return jsonify(success=False)
+    
 if __name__ == "__main__":
     app.run(host='localhost',port=8000,debug=True)
+    
+    # df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+    #                       ['StartDate','TerminateDate'])
+    # today=pd.Timestamp.today()
+    # df['life']=(today-df['StartDate']).apply(lambda x:x.days)
+    # df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
+    #                                             df.loc[df['StartDate'].notna(),'TerminateDate']).apply(lambda x:x.days)
+    # df['life']=df['life'].apply(lambda x:np.random.randint(800))
+    # df.drop(columns=['StartDate','TerminateDate'],inplace=True)
+    # data=df.groupby('Type').apply(lambda x:x['life'].to_list())
+    # key,val=data.index.to_list(),data.to_list()
     

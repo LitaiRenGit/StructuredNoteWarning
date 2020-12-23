@@ -17,7 +17,7 @@ if __name__ == "__main__":
     # for i,sn in enumerate(structurenotes):
     #     print('{}号凭证预警信息：'.format(i+1))
     #     sn.print_warning()
-    RF.to_db(structurenotes,auto_key=False)
+    # RF.to_db(structurenotes,auto_key=False)
     RF.price_to_db(data)
     
     # RF.conn.close()
