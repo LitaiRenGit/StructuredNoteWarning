@@ -107,7 +107,6 @@ def calcRule():
 @app.route('/api/search/add',methods=['POST'])
 def addRule():
     json_dict=request.get_json()
-    # app.logger.info(json_dict)
     for field in ['KnockOut','Strike','KnockIn','Rate','ParValue','ContractNumber']:
         if field in json_dict:
             json_dict[field]=float(json_dict[field])
@@ -135,7 +134,7 @@ def my_hist(x,bins=None):
     import numpy as np
     from scipy.stats import gaussian_kde
     if bins is None:
-        bins=np.arange(0.5,1.5+1e-8,0.05)
+        bins=np.arange(0.4,1.5+1e-8,0.05)
     hist,edges=np.histogram(x,bins=bins)
     center=(edges[:-1]+edges[1:])/2
     pdf=gaussian_kde(x).pdf(center)
@@ -204,7 +203,7 @@ def chartRule():
             return_3m=_f(series,3*daynum_1m)
             return_6m=_f(series,6*daynum_1m)
             return_12m=_f(series,12*daynum_1m)
-            return_axis=np.arange(0.5,1.5+1e-8,0.001)
+            return_axis=np.arange(0.4,1.5+1e-8,0.001)
             # return_axis=(return_axis[:-1]+return_axis[1:])/2
             pdf_1m=gaussian_kde(return_1m).pdf(return_axis)
             pdf_3m=gaussian_kde(return_3m).pdf(return_axis)
@@ -228,18 +227,52 @@ def chartRule():
         key,val=data.index.to_list(),data.to_list()
         return jsonify(x=key,y=val,success=True)
     return jsonify(success=False)
+
+@app.route('/api/monitor/rule',methods=['GET'])
+def getRule2():
+    args=dict(request.args)
+    current=int(args.pop('current'))
+    pagesize=int(args.pop('pageSize'))
+    _sorter=json.loads(args.pop('sorter')) #dict{column->ascend/descend}
+    for key,val in _sorter.items():
+        if val.lower()=='ascend':
+            _sorter[key]='ASC'
+        elif val.lower()=='descend':
+            _sorter[key]='DESC'
+    _filter=json.loads(args.pop('filter'))
+    if not _sorter: _sorter={'key':'DESC'} #default descending ordered by key
+    total=RF.fetch_length('Profile')
+    start_i=(current-1)*pagesize
+    end_i=current*pagesize
+    match={}
+    for key in list(args.keys()):
+        if args[key]=='':
+            args.pop(key)
+    if 'key' in args:
+        #we can only match key, not like key
+        match['key']=args.pop('key')
+    df=RF.fetch_db('select * from Profile Left Join Warning On Profile.key==Warning.key Where WarningType is not NULL',
+                   ['*'],match,args,_sorter,start_i,end_i)
+    app.logger.info(df.shape)
+    app.logger.info(df.shape)
+    df=_post_process(df)
+    data=[row.to_dict() for _,row in df.iterrows()]
+    return jsonify(data=data,total=total,success=True,pageSize=pagesize,current=current)
+
+@app.route('/api/monitor/remove',methods=['POST'])
+def removeRule2():
+    key=request.get_json()['key']# can't decode json into request.form, so use .get_json()
+    RF.delete_rows('Profile',{'key':key})
+    RF.delete_rows('Warning',{'key':key})
+    df=RF.fetch_db('select * from Profile Left Join Warning On Profile.key==Warning.key Where WarningType is not NULL',
+                   ['*'],{},{},{'key':'DESC'})
+    total=RF.fetch_length('Profile')
+    df=_post_process(df)
+    data=[row.to_dict() for _,row in df.iterrows()]
+    pagination={'total':total}
+    return jsonify(list=data,pagination=pagination)
     
 if __name__ == "__main__":
     # app.run(host='localhost',port=8000,debug=True)
-    
-    df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
-                          ['StartDate','TerminateDate'])
-    today=pd.Timestamp.today()
-    df['life']=(today-df['StartDate']).apply(lambda x:x.days)
-    df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
-                                                df.loc[df['TerminateDate'].notna(),'StartDate']).apply(lambda x:x.days)
-    # df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
-    df.drop(columns=['StartDate','TerminateDate'],inplace=True)
-    data=df.groupby('Type').apply(lambda x:x['life'].to_list())
-    key,val=data.index.to_list(),data.to_list()
+    df=RF.fetch_db('select * from Profile Left Join Warning On Profile.key==Warning.key',['*'],{},{},{'key':'DESC'})
     
