@@ -416,3 +416,92 @@ def add_row(json_dict,engine=engine):
     SN.update_structurenotes(structurenotes)
     key=to_db(structurenotes,True,engine)
     return key
+#%%
+# =============================================================================
+# mock data
+# =============================================================================
+def mock_profiles(num,seed=None):
+    import datetime as dt
+    import random
+    from itertools import repeat
+    from pandas.tseries.offsets import Week
+    
+    def _monthly_bd_gen(start_date,end_date):
+        date_series=pd.date_range(start_date,end_date,freq='M').to_series()
+        date_series=date_series.apply(lambda x: x+Week(2,weekday=2))# 每月第二个周三
+        date_str=','.join(date_series.apply(lambda x:x.strftime('%Y/%m/%d')))
+        return date_str
+    
+    def _mock_profile(seed=None):
+        random.seed(seed)
+        profile=pd.Series(np.nan,index=_ch_profile_columns)
+        profile['index']=0
+        if random.random()<0.5:
+            #50% 可能性当前日期为以下区间
+            date_range=[dt.date(2015,1,1),dt.date(2020,12,1)]
+            ordinal_range=list(map(lambda x:x.toordinal(),date_range))
+            profile['当前日期']=pd.to_datetime(dt.date.fromordinal(random.randint(ordinal_range[0],ordinal_range[1])))
+        else:
+            #剩余可能性为系统今天
+            profile['当前日期']=pd.to_datetime(dt.date.today())
+        profile['挂钩标的']='中证500指数（000905.SH）'
+        profile['凭证类型']=random.choice(list(structurenote_mapper.keys()))
+        contract_life=random.choice([1,2])
+        date=profile['当前日期'].date()
+        ordinal_range=[date.toordinal()-365*contract_life,date.toordinal()]
+        profile['期初观察日']=pd.to_datetime(dt.date.fromordinal(random.randint(ordinal_range[0],ordinal_range[1])))
+        profile['到期日']=pd.to_datetime(dt.date.fromordinal(profile['期初观察日'].date().toordinal()+365*contract_life))
+        if profile['凭证类型']=='鲨鱼鳍':
+            profile['期末观察日']=profile['到期日']-Week(1,weekday=4) #到期日前一个周五
+        profile['敲出水平']=1+random.random()*0.1 #in [1,1.1]
+        profile['行权水平']=1
+        profile['敲入水平']=0.7+random.random()*0.15 #in [0.7,0.85]
+        if profile['凭证类型']=='凤凰':
+            profile['票面利率']=0.015+random.random()*0.01 #in [0.015,0.025]
+        else:
+            profile['票面利率']=0.07+random.random()*0.02 #in [0.07,0.09]
+        if profile['凭证类型']=='凤凰':
+            profile['付息判断基准']=profile['敲入水平']
+        profile['份额面值']=100
+        profile['收益凭证份额']=random.randint(1, 10)
+        if profile['凭证类型']=='鲨鱼鳍':
+            profile['约定收益率']=0.02+random.random()*0.04 #in [0.02,0.06]
+            profile['期望涨幅']=0.5+random.random()*1 #in [0.5,1.5]
+            profile['涨幅差乘数']=1+random.random()*4 #in [1,5]
+            profile['最低收益率']=0+random.random()*0.01 #in [0,0.01]
+        profile['自动推断营业日']=0
+        profile['自动推断交易日']=1
+        if profile['凭证类型']!='鲨鱼鳍':
+            profile['敲出观察日']=_monthly_bd_gen(profile['期初观察日'],profile['到期日'])
+            profile['敲入观察日']='all'
+        if profile['凭证类型']=='凤凰':
+            profile['付息观察日']=profile['敲出观察日']
+        profile['名称']=''.join(['中证',profile['凭证类型'],profile['期初观察日'].strftime('%y%m')])
+        return profile
+        
+    profiles=pd.DataFrame([],columns=_ch_profile_columns)
+    index=list(range(1,num+1))
+    profiles['index']=index
+    if seed is None:
+        seed_series=repeat(None)
+    else:
+        np.random.seed(seed)
+        seed_series=np.random.randint(0,100000000,size=num)
+    for i,s in zip(index,seed_series):
+        profiles.iloc[i-1,:]=_mock_profile(s)
+    profiles['index']=index
+    profiles.set_index('index',inplace=True)
+    return profiles
+
+def mock_structurenotes(num,seed=None):
+    from pandas.tseries.offsets import Day
+    profiles=mock_profiles(num,seed)
+    data=execute_sql('Select * From Price',engine,parse_dates=['Date'])
+    data.columns=['日期','收盘价格']
+    data.set_index('日期',drop=True,inplace=True)
+    structurenotes=[]
+    for i,profile in profiles.iterrows():
+        sn_type=profile.loc['凭证类型']
+        sn=structurenote_mapper[sn_type]
+        structurenotes.append(sn(profile,data[data.index>=(profile['期初观察日']-Day(30))]))
+    return structurenotes

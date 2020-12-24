@@ -54,7 +54,7 @@ def _post_process(df):
     df=df.where(df.notna(), None)#convert np.nan to None, otherwise frontend doesn't recognize
     return df
 
-@app.route('/api/monitor/rule',methods=['GET'])
+@app.route('/api/search/rule',methods=['GET'])
 def getRule():
     args=dict(request.args)
     current=int(args.pop('current'))
@@ -82,7 +82,7 @@ def getRule():
     data=[row.to_dict() for _,row in df.iterrows()]
     return jsonify(data=data,total=total,success=True,pageSize=pagesize,current=current)
 
-@app.route('/api/monitor/remove',methods=['POST'])
+@app.route('/api/search/remove',methods=['POST'])
 def removeRule():
     key=request.get_json()['key']# can't decode json into request.form, so use .get_json()
     RF.delete_rows('Profile',{'key':key})
@@ -94,17 +94,17 @@ def removeRule():
     pagination={'total':total}
     return jsonify(list=data,pagination=pagination)
 
-@app.route('/api/monitor/calculate',methods=['POST'])
+@app.route('/api/search/calculate',methods=['POST'])
 def calcRule():
     json_dict=request.get_json()
     if json_dict['method']=='calculate':
         key=[json_dict['key']]
     elif json_dict['method']=='multicalculate':
         key=json_dict['key']
-    RF.calc_db(key,pd.to_datetime('2020-11-30')) #temporarily use 11-30 as latest date
+    RF.calc_db(key)
     return jsonify(key=key,success=True)
 
-@app.route('/api/monitor/add',methods=['POST'])
+@app.route('/api/search/add',methods=['POST'])
 def addRule():
     json_dict=request.get_json()
     # app.logger.info(json_dict)
@@ -122,7 +122,7 @@ def addRule():
     data=data[0]
     return jsonify(**data)
 
-@app.route('/api/monitor/update',methods=['POST'])
+@app.route('/api/search/update',methods=['POST'])
 def updatePrice():
     json_dict=request.get_json()
     code=json_dict['code']
@@ -167,11 +167,11 @@ def chartRule():
         df=RF.fetch_db('select * from Profile Left Join Warning On Profile.key==Warning.key',['*'],{'isTerminated':0},{},{'key':'DESC'})
         pie_series=df.groupby('Type')['Type'].count()
         data_1={'x':pie_series.index.to_list(),'y':pie_series.to_list()}
-        df=RF.execute_sql('select Maturity,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
-                          'Maturity')
-        df['year']=df['Maturity'].apply(lambda x:x.year)
-        df['year']=df['year'].apply(lambda x:2018+np.random.randint(4))#mock data
-        df.drop(columns='Maturity',inplace=True)
+        df=RF.execute_sql('select StartDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          'StartDate')
+        df['year']=df['StartDate'].apply(lambda x:x.year)
+        # df['year']=df['year'].apply(lambda x:2018+np.random.randint(4))#mock data
+        df.drop(columns='StartDate',inplace=True)
         df['num']=1
         hist_count=pd.pivot_table(df,values='num',index='Type',columns='year',aggfunc=np.sum)
         hist_count=hist_count.where(hist_count.notna(), 0)
@@ -179,10 +179,12 @@ def chartRule():
                 'legend':hist_count.index.to_list()}
         return jsonify(data_1=data_1,data_2=data_2,success=True)
     elif method == "statistics_2":
-        df=RF.execute_sql('select * from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+        df=RF.execute_sql('select * from Profile Left Join Warning On Profile.key==Warning.key Where IsTerminated=0',RF.engine,
                           RF._en_profile_date_columns)
-        df['KnockOut']=df['KnockOut'].apply(lambda x:1+0.2*np.random.randn())#mock data
-        df['KnockIn']=df['KnockIn'].apply(lambda x:0.8-0.2*np.random.randn())#mock data
+        # df['KnockOut']=df['KnockOut'].apply(lambda x:1+0.2*np.random.randn())#mock data
+        # df['KnockIn']=df['KnockIn'].apply(lambda x:0.8-0.2*np.random.randn())#mock data
+        df['KnockOut']=df['KnockOut']/df['PriceLevel'] #adjust it to current pricelevel
+        df['KnockIn']=df['KnockIn']/df['PriceLevel'] #adjust it to current pricelevel
         center,hist,pdf=my_hist(df['KnockOut'].dropna().to_numpy())
         center,hist,pdf=center.tolist(),hist.tolist(),pdf.tolist()
         KnockOut=dict(center=center,hist=hist,pdf=pdf)
@@ -214,13 +216,13 @@ def chartRule():
         price_level_pdf=dict(x=return_axis,pdf_1m=pdf_1m,pdf_3m=pdf_3m,pdf_6m=pdf_6m,pdf_12m=pdf_12m)
         return jsonify(KnockOut=KnockOut,KnockIn=KnockIn,price_level_pdf=price_level_pdf,success=True)
     elif method == 'statistics_3':
-        df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
-                          ['StartDate','TerminateDate'])
-        today=pd.Timestamp.today()
-        df['life']=(today-df['StartDate']).apply(lambda x:x.days)
+        df=RF.execute_sql('select Date,StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          ['Date','StartDate','TerminateDate'])
+        # today=pd.Timestamp.today()
+        df['life']=(df['Date']-df['StartDate']).apply(lambda x:x.days)
         df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
-                                                    df.loc[df['StartDate'].notna(),'TerminateDate']).apply(lambda x:x.days)
-        df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
+                                                    df.loc[df['TerminateDate'].notna(),'StartDate']).apply(lambda x:x.days)
+        # df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
         df.drop(columns=['StartDate','TerminateDate'],inplace=True)
         data=df.groupby('Type').apply(lambda x:x['life'].to_list())
         key,val=data.index.to_list(),data.to_list()
@@ -228,16 +230,16 @@ def chartRule():
     return jsonify(success=False)
     
 if __name__ == "__main__":
-    app.run(host='localhost',port=8000,debug=True)
+    # app.run(host='localhost',port=8000,debug=True)
     
-    # df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
-    #                       ['StartDate','TerminateDate'])
-    # today=pd.Timestamp.today()
-    # df['life']=(today-df['StartDate']).apply(lambda x:x.days)
-    # df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
-    #                                             df.loc[df['StartDate'].notna(),'TerminateDate']).apply(lambda x:x.days)
-    # df['life']=df['life'].apply(lambda x:np.random.randint(800))
-    # df.drop(columns=['StartDate','TerminateDate'],inplace=True)
-    # data=df.groupby('Type').apply(lambda x:x['life'].to_list())
-    # key,val=data.index.to_list(),data.to_list()
+    df=RF.execute_sql('select StartDate,TerminateDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
+                          ['StartDate','TerminateDate'])
+    today=pd.Timestamp.today()
+    df['life']=(today-df['StartDate']).apply(lambda x:x.days)
+    df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
+                                                df.loc[df['TerminateDate'].notna(),'StartDate']).apply(lambda x:x.days)
+    # df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
+    df.drop(columns=['StartDate','TerminateDate'],inplace=True)
+    data=df.groupby('Type').apply(lambda x:x['life'].to_list())
+    key,val=data.index.to_list(),data.to_list()
     

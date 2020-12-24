@@ -11,12 +11,15 @@ from pandas.tseries.offsets import CustomBusinessDay
 
 def update_structurenotes(structurenotes):
     import pandas as pd
-    for sn in structurenotes:
-        last_update=sn.profile.loc['最后更新日期']
-        if pd.isna(last_update):
-            sn.update()
-        else:
-            sn.update(last_update)
+    for i,sn in enumerate(structurenotes):
+        try:
+            last_update=sn.profile.loc['最后更新日期']
+            if pd.isna(last_update):
+                sn.update()
+            else:
+                sn.update(last_update)
+        except:
+            print('{}th structurenote went wrong.'.format(i))
     return structurenotes
 
 class StructuredNote:
@@ -192,11 +195,16 @@ class StructuredNote:
         """
         if start_date is None: start_date=self.start_date
         dates=pd.date_range(start_date,self.today)
-        for date in dates:
-            self.today=date
+        if dates.empty:
             self._init_currentclass()
             self.create_event()
-            # self.print_warning()
+        else:
+            for date in dates:
+                self.today=date
+                self._init_currentclass()
+                self.create_event()
+                # self.print_warning()
+        
         self.profile.loc['最后更新日期']=dates[-1]
             
     def holidays_infer(self,infer_bd=False,infer_td=False):
