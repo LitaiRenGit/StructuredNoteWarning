@@ -108,7 +108,9 @@ def calcRule():
 @app.route('/api/search/add',methods=['POST'])
 def addRule():
     json_dict=request.get_json()
-    for field in ['KnockOut','Strike','KnockIn','Rate','ParValue','ContractNumber']:
+    for field in ['KnockOut','Strike','KnockIn','Rate','CouponCondition',
+                  'AgreedRate','ExpectedReturn','ReturnMultiplier','MinRate',
+                  'BusinessDateInfer','TradingDateInfer','ParValue','ContractNumber']:
         if field in json_dict:
             json_dict[field]=float(json_dict[field])
     for field in ['BusinessDateInfer','TradingDateInfer']:
