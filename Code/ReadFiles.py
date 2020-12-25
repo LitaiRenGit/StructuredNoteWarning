@@ -16,13 +16,14 @@ structurenote_mapper={
     }
 
 def read_excel(path):
+    from pandas.tseries.offsets import Day
     profiles=pd.read_excel(path,sheet_name='条款',index_col=0)
     data=pd.read_excel(path,sheet_name='标的数据').set_index('日期').sort_index()
     structurenotes=[]
     for _,profile in profiles.iterrows():
         sn_type=profile.loc['凭证类型']
         sn=structurenote_mapper[sn_type]
-        structurenotes.append(sn(profile,data.copy()))
+        structurenotes.append(sn(profile,data[data.index>=(profile['期初观察日']-Day(30))]))
     return structurenotes,data
 
 def to_excel(path,structurenotes):
@@ -37,7 +38,7 @@ def to_excel(path,structurenotes):
     warnings.index=profiles.index
     with pd.ExcelWriter(path) as writer:
         profiles.to_excel(writer,sheet_name='条款')
-        structurenotes[0].data.loc[:,'收盘价格'].sort_index(ascending=False).to_excel(writer,sheet_name='标的数据')
+        # structurenotes[0].data.loc[:,'收盘价格'].sort_index(ascending=False).to_excel(writer,sheet_name='标的数据')
         warnings.to_excel(writer,sheet_name='事件预警')
 #%%
 # =============================================================================
@@ -215,6 +216,7 @@ def execute_sql(sql_stmt, engine, parse_dates=None, change=False):
             return result_df
         
 def read_db(engine=engine):
+    from pandas.tseries.offsets import Day
     profiles=execute_sql('Select * From Profile',engine,parse_dates=_en_profile_date_columns)
     data=execute_sql('Select * From Price',engine,parse_dates=['Date'])
     warnings=execute_sql('Select * From Warning',engine)
@@ -228,7 +230,7 @@ def read_db(engine=engine):
     for _,profile in profiles.iterrows():
         sn_type=profile.loc['凭证类型']
         sn=structurenote_mapper[sn_type]
-        structurenotes.append(sn(profile,data.copy()))
+        structurenotes.append(sn(profile,data[data.index>=(profile['期初观察日']-Day(30))]))
     return structurenotes
 
 def update_db(df,engine,table_name,key,auto_key=False):
@@ -290,6 +292,7 @@ def calc_db(key_list,untill_date=None,engine=engine):
         which rows in Profile will be calculate
     """
     import datetime as dt
+    from pandas.tseries.offsets import Day
     if untill_date is None:
         untill_date=pd.to_datetime(dt.date.today())
     else:
@@ -307,7 +310,7 @@ def calc_db(key_list,untill_date=None,engine=engine):
     for _,profile in profiles.iterrows():
         sn_type=profile.loc['凭证类型']
         sn=structurenote_mapper[sn_type]
-        structurenotes.append(sn(profile,data.copy()))
+        structurenotes.append(sn(profile,data[data.index>=(profile['期初观察日']-Day(30))]))
     SN.update_structurenotes(structurenotes)
     to_db(structurenotes,False,engine)
 #%%
@@ -398,6 +401,7 @@ def add_row(json_dict,engine=engine):
     Add one structurenote to database (1 row), params given by frontend.
     Database automatically generates the key.
     """
+    from pandas.tseries.offsets import Day
     profiles=pd.Series(index=_en_profile_columns)
     profiles.update(json_dict)
     profiles.loc[_en_profile_date_columns]=pd.to_datetime(profiles.loc[_en_profile_date_columns])
@@ -412,7 +416,7 @@ def add_row(json_dict,engine=engine):
     for _,profile in profiles.iterrows():
         sn_type=profile.loc['凭证类型']
         sn=structurenote_mapper[sn_type]
-        structurenotes.append(sn(profile,data.copy()))
+        structurenotes.append(sn(profile,data[data.index>=(profile['期初观察日']-Day(30))]))
     SN.update_structurenotes(structurenotes)
     key=to_db(structurenotes,True,engine)
     return key

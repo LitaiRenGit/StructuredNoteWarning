@@ -48,9 +48,10 @@ def test():
 
 def _post_process(df):
     #process df retreived from db to match the dtype required by frontend
-    df['Status']=1
-    df.loc[df['WarningType'].notna(),'Status']=2
-    df.loc[df['IsTerminated']==1,'Status']=0
+    df['Status']=1 #存续
+    df.loc[df['IsKnockIn']==1,'Status']=2 #敲入
+    df.loc[df['IsKnockOut']==1,'Status']=3 #敲出
+    df.loc[df['IsTerminated']==1,'Status']=0 #终止
     df=df.where(df.notna(), None)#convert np.nan to None, otherwise frontend doesn't recognize
     return df
 
@@ -223,9 +224,17 @@ def chartRule():
                                                     df.loc[df['TerminateDate'].notna(),'StartDate']).apply(lambda x:x.days)
         # df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
         df.drop(columns=['StartDate','TerminateDate'],inplace=True)
-        data=df.groupby('Type').apply(lambda x:x['life'].to_list())
-        key,val=data.index.to_list(),data.to_list()
-        return jsonify(x=key,y=val,success=True)
+        data=df.groupby('Type',sort=True).apply(lambda x:x['life'].to_list())
+        key,val_1=data.index.to_list(),data.to_list()
+        
+        df=RF.execute_sql('select Date,Maturity,Type from Profile Left Join Warning On Profile.key==Warning.key Where IsTerminated=0',
+                          RF.engine,['Date','Maturity'])
+        # today=pd.Timestamp.today()
+        df['residual_life']=(df['Maturity']-df['Date']).apply(lambda x:x.days)
+        df.drop(columns=['Date','Maturity'],inplace=True)
+        data=df.groupby('Type',sort=True).apply(lambda x:x['residual_life'].to_list())
+        key,val_2=data.index.to_list(),data.to_list()
+        return jsonify(x=key,y1=val_1,y2=val_2,success=True)
     return jsonify(success=False)
 
 @app.route('/api/monitor/rule',methods=['GET'])
