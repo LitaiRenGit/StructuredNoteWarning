@@ -12,19 +12,19 @@ from pandas.tseries.offsets import CustomBusinessDay
 def update_structurenotes(structurenotes):
     import pandas as pd
     for i,sn in enumerate(structurenotes):
-        # last_update=sn.profile.loc['最后更新日期']
+        last_update=sn.profile.loc['最后更新日期']
+        if pd.isna(last_update):
+            sn.update()
+        else:
+            sn.update(last_update)
+        # try:
+        #     last_update=sn.profile.loc['最后更新日期']
         #     if pd.isna(last_update):
         #         sn.update()
         #     else:
         #         sn.update(last_update)
-        try:
-            last_update=sn.profile.loc['最后更新日期']
-            if pd.isna(last_update):
-                sn.update()
-            else:
-                sn.update(last_update)
-        except:
-            print('{}th structurenote went wrong.'.format(i))
+        # except:
+        #     print('{}th structurenote went wrong.'.format(i))
     return structurenotes
 
 class StructuredNote:
