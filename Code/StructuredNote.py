@@ -12,19 +12,19 @@ from pandas.tseries.offsets import CustomBusinessDay
 def update_structurenotes(structurenotes):
     import pandas as pd
     for i,sn in enumerate(structurenotes):
-        last_update=sn.profile.loc['最后更新日期']
-        if pd.isna(last_update):
-            sn.update()
-        else:
-            sn.update(last_update)
-        # try:
-        #     last_update=sn.profile.loc['最后更新日期']
-        #     if pd.isna(last_update):
-        #         sn.update()
-        #     else:
-        #         sn.update(last_update)
-        # except:
-        #     print('{}th structurenote went wrong.'.format(i))
+        # last_update=sn.profile.loc['最后更新日期']
+        # if pd.isna(last_update):
+        #     sn.update()
+        # else:
+        #     sn.update(last_update)
+        try:
+            last_update=sn.profile.loc['最后更新日期']
+            if pd.isna(last_update):
+                sn.update()
+            else:
+                sn.update(last_update)
+        except:
+            print('{}th structurenote went wrong.'.format(i))
     return structurenotes
 
 class StructuredNote:
@@ -420,8 +420,7 @@ class Shark(StructuredNote):
             #if not knockout
             rate=self.profile.loc['约定收益率']
         else:
-            td=CustomBusinessDay(0,holidays=self.td_holidays)
-            td_pre_today=self.today-td
+            td_pre_today=self.td_backward_offset(self.today)
             end_date=min(td_pre_today,self.profile.loc['期末观察日'])
             end_price=self.data.loc[end_date,'收盘价格']
             rate=(max(0,end_price/self.start_price-self.profile.loc['期望涨幅'])*

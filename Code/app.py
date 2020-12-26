@@ -137,7 +137,7 @@ def my_hist(x,bins=None):
     import numpy as np
     from scipy.stats import gaussian_kde
     if bins is None:
-        bins=np.arange(0.4,1.5+1e-8,0.05)
+        bins=np.arange(0.4,1.7+1e-8,0.05)
     hist,edges=np.histogram(x,bins=bins)
     center=(edges[:-1]+edges[1:])/2
     pdf=gaussian_kde(x).pdf(center)
@@ -172,7 +172,6 @@ def chartRule():
         df=RF.execute_sql('select StartDate,Type from Profile Left Join Warning On Profile.key==Warning.key',RF.engine,
                           'StartDate')
         df['year']=df['StartDate'].apply(lambda x:x.year)
-        # df['year']=df['year'].apply(lambda x:2018+np.random.randint(4))#mock data
         df.drop(columns='StartDate',inplace=True)
         df['num']=1
         hist_count=pd.pivot_table(df,values='num',index='Type',columns='year',aggfunc=np.sum)
@@ -181,10 +180,8 @@ def chartRule():
                 'legend':hist_count.index.to_list()}
         return jsonify(data_1=data_1,data_2=data_2,success=True)
     elif method == "statistics_2":
-        df=RF.execute_sql('select * from Profile Left Join Warning On Profile.key==Warning.key Where IsTerminated=0',RF.engine,
-                          RF._en_profile_date_columns)
-        # df['KnockOut']=df['KnockOut'].apply(lambda x:1+0.2*np.random.randn())#mock data
-        # df['KnockIn']=df['KnockIn'].apply(lambda x:0.8-0.2*np.random.randn())#mock data
+        df=RF.execute_sql('select * from Profile Left Join Warning On Profile.key==Warning.key Where IsTerminated=0 And Type!="鲨鱼鳍"',
+                          RF.engine,RF._en_profile_date_columns)
         df['KnockOut']=df['KnockOut']/df['PriceLevel'] #adjust it to current pricelevel
         df['KnockIn']=df['KnockIn']/df['PriceLevel'] #adjust it to current pricelevel
         center,hist,pdf=my_hist(df['KnockOut'].dropna().to_numpy())
@@ -206,8 +203,7 @@ def chartRule():
             return_3m=_f(series,3*daynum_1m)
             return_6m=_f(series,6*daynum_1m)
             return_12m=_f(series,12*daynum_1m)
-            return_axis=np.arange(0.4,1.5+1e-8,0.001)
-            # return_axis=(return_axis[:-1]+return_axis[1:])/2
+            return_axis=np.arange(0.4,1.7+1e-8,0.001)
             pdf_1m=gaussian_kde(return_1m).pdf(return_axis)
             pdf_3m=gaussian_kde(return_3m).pdf(return_axis)
             pdf_6m=gaussian_kde(return_6m).pdf(return_axis)
@@ -224,7 +220,6 @@ def chartRule():
         df['life']=(df['Date']-df['StartDate']).apply(lambda x:x.days)
         df.loc[df['TerminateDate'].notna(),'life']=(df.loc[df['TerminateDate'].notna(),'TerminateDate']-
                                                     df.loc[df['TerminateDate'].notna(),'StartDate']).apply(lambda x:x.days)
-        # df['life']=df['life'].apply(lambda x:np.random.randint(800)) #mock data
         df.drop(columns=['StartDate','TerminateDate'],inplace=True)
         data=df.groupby('Type',sort=True).apply(lambda x:x['life'].to_list())
         key,val_1=data.index.to_list(),data.to_list()

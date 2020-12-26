@@ -260,7 +260,7 @@ def update_db(df,engine,table_name,key,auto_key=False):
 def to_db(structurenotes,auto_key=False,engine=engine):
     profiles=[]
     warnings=[]
-    for sn in structurenotes:
+    for i,sn in enumerate(structurenotes):
         profile,warning_series=sn.to_excel()
         profiles.append(profile)
         warnings.append(warning_series)
@@ -457,13 +457,15 @@ def mock_profiles(num,seed=None):
         profile['到期日']=pd.to_datetime(dt.date.fromordinal(profile['期初观察日'].date().toordinal()+365*contract_life))
         if profile['凭证类型']=='鲨鱼鳍':
             profile['期末观察日']=profile['到期日']-Week(1,weekday=4) #到期日前一个周五
-        profile['敲出水平']=1+random.random()*0.1 #in [1,1.1]
+        profile['敲出水平']=1.03+random.random()*0.07 #in [1.03,1.1]
         profile['行权水平']=1
         profile['敲入水平']=0.7+random.random()*0.15 #in [0.7,0.85]
         if profile['凭证类型']=='凤凰':
             profile['票面利率']=0.015+random.random()*0.01 #in [0.015,0.025]
-        else:
-            profile['票面利率']=0.07+random.random()*0.02 #in [0.07,0.09]
+        elif profile['凭证类型']=='雪球':
+            profile['票面利率']=(0.07+random.random()*0.03)*contract_life #in [0.07,0.1]
+        elif profile['凭证类型']=='固定息票':
+            profile['票面利率']=(0.05+random.random()*0.02)*contract_life #in [0.07,0.1]
         if profile['凭证类型']=='凤凰':
             profile['付息判断基准']=profile['敲入水平']
         profile['份额面值']=100
