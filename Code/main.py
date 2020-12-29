@@ -10,12 +10,12 @@ if __name__ == "__main__":
     import StructuredNote as SN
     import ReadFiles as RF
     warnings.filterwarnings('ignore')
-    # structurenotes=RF.mock_structurenotes(500,seed=None)
+    structurenotes=RF.mock_structurenotes(500,seed=None)
     # _,structurenotes=zip(*list(filter(lambda x: x[0] not in [37],enumerate(structurenotes)))) #filter out invalid mock sample
     # structurenotes=list(structurenotes)
     # structurenotes,data=RF.read_excel(r'../Data\StructuredNote_template.xlsx')
     # structurenotes=RF.read_db()
-    # SN.update_structurenotes(structurenotes)
+    SN.update_structurenotes(structurenotes)
     
     # RF.to_excel(r'../Data\output_template.xlsx',structurenotes)
     # for i,sn in enumerate(structurenotes):

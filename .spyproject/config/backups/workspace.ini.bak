@@ -6,5 +6,5 @@ save_non_project_files = False
 
 [main]
 version = 0.2.0
-recent_files = ['Code\\StructuredNote.py', 'Code\\ReadFiles.py', 'Code\\app.py', 'Code\\WindDB.py', 'Code\\main.py']
+recent_files = ['Code\\StructuredNote.py', 'Code\\ReadFiles.py', 'Code\\app.py', 'Code\\WindDB.py', 'Code\\main.py', '..\\StaticHedging\\StaticHedging.py']
 
